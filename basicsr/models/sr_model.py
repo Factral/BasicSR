@@ -3,6 +3,9 @@ from collections import OrderedDict
 from os import path as osp
 from tqdm import tqdm
 
+import wandb
+from basicsr.utils import log_images_to_wandb, reset_wandb_image_counter
+
 from basicsr.archs import build_network
 from basicsr.losses import build_loss
 from basicsr.metrics import calculate_metric
@@ -186,6 +189,17 @@ class SRModel(BaseModel):
         with_metrics = self.opt['val'].get('metrics') is not None
         use_pbar = self.opt['val'].get('pbar', False)
 
+        # Check if wandb image logging is enabled
+        log_wandb_images = (
+            self.opt['logger'].get('wandb') is not None and
+            self.opt['val'].get('log_wandb_images', False)
+        )
+
+        # Import wandb utilities only when needed
+        if log_wandb_images:
+            wandb_log_freq = self.opt['val'].get('wandb_log_freq', 10)
+            wandb_max_images = self.opt['val'].get('wandb_max_images', 8)
+
         if with_metrics:
             if not hasattr(self, 'metric_results'):  # only execute in the first run
                 self.metric_results = {metric: 0 for metric in self.opt['val']['metrics'].keys()}
@@ -207,9 +221,24 @@ class SRModel(BaseModel):
             visuals = self.get_current_visuals()
             sr_img = tensor2img([visuals['result']])
             metric_data['img'] = sr_img
+            metric_data['lq'] = tensor2img([visuals['lq']])
             if 'gt' in visuals:
                 gt_img = tensor2img([visuals['gt']])
                 metric_data['img2'] = gt_img
+
+            if log_wandb_images:
+                log_images_to_wandb(
+                    wandb=wandb,
+                    visuals=visuals,
+                    img_name=img_name,
+                    current_iter=current_iter,
+                    dataset_name=dataset_name,
+                    log_frequency=wandb_log_freq,
+                    max_images=wandb_max_images
+                )
+
+            # Clean up GPU memory (moved after wandb logging to ensure tensors are available)
+            if 'gt' in visuals:
                 del self.gt
 
             # tentative for out of GPU memory
@@ -270,6 +299,37 @@ class SRModel(BaseModel):
         if hasattr(self, 'gt'):
             out_dict['gt'] = self.gt.detach().cpu()
         return out_dict
+
+    def log_training_images(self, current_iter):
+        """Log training images to wandb if enabled."""
+        # Check if wandb training image logging is enabled
+        log_wandb_train_images = (
+            self.opt['logger'].get('wandb') is not None and
+            self.opt['logger'].get('wandb', {}).get('log_train_images', False)
+        )
+
+        if log_wandb_train_images:
+            try:
+                import wandb
+                from basicsr.utils import log_training_images_to_wandb
+
+                # Get configuration options
+                train_log_freq = self.opt['logger'].get('wandb', {}).get('train_log_freq', 100)
+                train_max_images = self.opt['logger'].get('wandb', {}).get('train_max_images', 2)
+
+                # Get current training visuals
+                visuals = self.get_current_visuals()
+
+                # Log training images
+                log_training_images_to_wandb(
+                    wandb=wandb,
+                    visuals=visuals,
+                    current_iter=current_iter,
+                    log_frequency=train_log_freq,
+                    max_images_per_log=train_max_images
+                )
+            except ImportError:
+                pass  # wandb not available, skip logging
 
     def save(self, epoch, current_iter):
         if hasattr(self, 'net_g_ema'):

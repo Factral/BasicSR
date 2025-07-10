@@ -6,6 +6,7 @@ from .img_util import crop_border, imfrombytes, img2tensor, imwrite, tensor2img
 from .logger import AvgTimer, MessageLogger, get_env_info, get_root_logger, init_tb_logger, init_wandb_logger
 from .misc import check_resume, get_time_str, make_exp_dirs, mkdir_and_rename, scandir, set_random_seed, sizeof_fmt
 from .options import yaml_load
+from .wandb_util import log_images_to_wandb, log_training_images_to_wandb, reset_wandb_image_counter
 
 __all__ = [
     #  color_util.py
@@ -43,5 +44,9 @@ __all__ = [
     'USMSharp',
     'usm_sharp',
     # options
-    'yaml_load'
+    'yaml_load',
+    # wandb_util
+    'log_images_to_wandb',
+    'log_training_images_to_wandb',
+    'reset_wandb_image_counter'
 ]

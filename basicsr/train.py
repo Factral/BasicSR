@@ -167,6 +167,11 @@ def train_pipeline(root_path):
             # training
             model.feed_data(train_data)
             model.optimize_parameters(current_iter)
+
+            # log training images to wandb if enabled
+            if hasattr(model, 'log_training_images'):
+                model.log_training_images(current_iter)
+
             iter_timer.record()
             if current_iter == 1:
                 # reset start time in msg_logger for more accurate eta_time
